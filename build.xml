@@ -44,7 +44,7 @@
 
 	<property name="premainclass" value="com.clarkparsia.empire.spi.Instrumentor"/>
 
-	<property name="javac.debug" value="off"/>
+	<property name="javac.debug" value="true"/>
 
 	<path id="project.class.path">
 		<pathelement location="${core.build.dir}"/>
