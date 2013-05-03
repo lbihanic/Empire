@@ -39,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.LinkedList;
 
 /**
  * <p>Collection of utility methods for working with Empire DataSources</p>
@@ -193,12 +194,12 @@ public final class DataSourceUtil {
 	}
 
 	/**
-	 * Return the type of the resource in the data source.
+	 * Return the types of the resource in the data source.
 	 * @param theSource the data source
 	 * @param theConcept the concept whose type to lookup
-	 * @return the rdf:type of the concept, or null if there is an error or one cannot be found.
+	 * @return the rdf:type values for the concept, or null if there is an error or one cannot be found.
 	 */
-	public static org.openrdf.model.Resource getType(DataSource theSource, Resource theConcept) {
+	public static Collection<Resource> getTypes(DataSource theSource, Resource theConcept) {
 		if (theSource == null) {
 			return null;
 		}
@@ -209,7 +210,12 @@ public final class DataSourceUtil {
 				return null;
 			}
 			else {
-				return (Resource) aTypes.iterator().next();
+				Collection<Resource> types = new LinkedList<Resource>();
+				for (Value v : aTypes) {
+				    types.add((Resource)v);
+				}
+				// return (Resource) aTypes.iterator().next();
+				return types;
 			}
 		}
 		catch (DataSourceException e) {

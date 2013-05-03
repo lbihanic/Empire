@@ -637,14 +637,14 @@ public final class EntityManagerImpl implements EntityManager {
 	 */
 	public <T> T find(final Class<T> theClass, final Object theObj) {
 		assertOpen();
-
+/*
 		try {
 			AnnotationChecker.assertValid(theClass);
 		}
 		catch (EmpireException e) {
 			throw new IllegalArgumentException(e);
 		}
-
+*/
 		try {
 			if (DataSourceUtil.exists(getDataSource(), EmpireUtil.asPrimaryKey(theObj))) {
 				T aT = RdfGenerator.fromRdf(theClass, EmpireUtil.asPrimaryKey(theObj), getDataSource());

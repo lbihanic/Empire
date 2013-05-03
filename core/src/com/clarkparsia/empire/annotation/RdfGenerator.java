@@ -63,6 +63,7 @@ import com.clarkparsia.empire.ds.DataSource;
 import com.clarkparsia.empire.ds.DataSourceException;
 import com.clarkparsia.empire.ds.QueryException;
 import com.clarkparsia.empire.ds.DataSourceUtil;
+import com.clarkparsia.empire.EmpireException;
 import com.clarkparsia.empire.EmpireOptions;
 import com.clarkparsia.empire.EmpireGenerated;
 import com.clarkparsia.empire.SupportsRdfId;
@@ -241,7 +242,7 @@ public final class RdfGenerator {
 		if (LOGGER.isDebugEnabled()) {
 			LOGGER.debug("Tried to get instance of class in {} ms ", (System.currentTimeMillis()-start ));
 		}
-
+/*
 		start = System.currentTimeMillis();
 
 		if (aObj == null) {
@@ -287,12 +288,17 @@ public final class RdfGenerator {
 		if (LOGGER.isDebugEnabled()) {
 			LOGGER.debug("Has rdfId {} ms", (System.currentTimeMillis()-start ));
 		}
-
+*/
 		start = System.currentTimeMillis();
 		
-		Class<T> aNewClass = determineClass(theClass, aObj, theSource);
-		
-		if (!aNewClass.equals(aObj.getClass())) {
+		Class<T> aNewClass = determineClass(theClass, theId, theSource);
+		try {
+                        AnnotationChecker.assertValid((aNewClass != null)? aNewClass: theClass);
+		}
+                catch (EmpireException e) {
+                        throw new IllegalArgumentException(e);
+                }
+//		if (!aNewClass.equals(aObj.getClass())) {
 			try {
 	            aObj = aNewClass.newInstance();
             }
@@ -307,15 +313,15 @@ public final class RdfGenerator {
 			}
 
 			asSupportsRdfId(aObj).setRdfId(theId);
-		}
+//		}
 
 		return fromRdf(aObj, theSource);
 	}
 	
 	@SuppressWarnings("unchecked")
-    private static <T> Class<T> determineClass(Class<T> theOrigClass, T theObj, DataSource theSource) throws InvalidRdfException, DataSourceException {
+    private static <T> Class<T> determineClass(Class<T> theOrigClass, SupportsRdfId.RdfKey theObj, DataSource theSource) throws InvalidRdfException, DataSourceException {
 		Class aResult = theOrigClass;
-		final SupportsRdfId aTmpSupportsRdfId = asSupportsRdfId(theObj);
+//		final SupportsRdfId aTmpSupportsRdfId = asSupportsRdfId(theObj);
 	 
 //		ExtGraph aGraph = new ExtGraph(DataSourceUtil.describe(theSource, theObj));
 		final Collection<Value> aTypes = DataSourceUtil.getValues(theSource, EmpireUtil.asResource(EmpireUtil.asSupportsRdfId(theObj)), RDF.TYPE);
@@ -1143,15 +1149,20 @@ public final class RdfGenerator {
 			// create an instance of that.  that will work, and pushes the likely failure back off to
 			// the assignment of the created instance
 
-			Resource aType = DataSourceUtil.getType(theSource, theId);
+			Collection<Resource> aTypes = DataSourceUtil.getTypes(theSource, theId);
 
 			// k, so now we know the type, if we can match the type to a class then we're in business
-			if (aType != null && aType instanceof URI) {
-				for (Class aTypeClass : TYPE_TO_CLASS.get( (URI) aType)) {
-					if (BeanReflectUtil.hasAnnotation(aTypeClass, RdfsClass.class)) {
-						// lets try this one
-						aClass = aTypeClass;
-						break;
+			if (aTypes != null) {
+				for (Resource aType : aTypes) {
+					if (aType instanceof URI) {
+						for (Class aTypeClass : TYPE_TO_CLASS.get( (URI) aType)) {
+							if ((BeanReflectUtil.hasAnnotation(aTypeClass, RdfsClass.class)) &&
+							    (aClass.isAssignableFrom(aTypeClass))) {
+								// lets try this one
+								aClass = aTypeClass;
+								break;
+							}
+						}
 					}
 				}
 			}

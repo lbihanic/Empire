@@ -378,7 +378,8 @@ public final class RdfQuery implements Query {
 
                             String aVarName = getProjectionVarName();
 
-                            if (aBS.getValue(aVarName) instanceof URI && AnnotationChecker.isValid(getBeanClass())) {
+                            // if (aBS.getValue(aVarName) instanceof URI && AnnotationChecker.isValid(getBeanClass())) {
+                            if (aBS.getValue(aVarName) instanceof URI) {
                                 if (EmpireOptions.ENABLE_QUERY_RESULT_PROXY) {
                                     aObj = new Proxy(getBeanClass(), asPrimaryKey(aBS.getValue(aVarName)), getSource());
                                 }
@@ -413,6 +414,9 @@ public final class RdfQuery implements Query {
                     aResults.close();
                 }
 			}
+		}
+		catch (PersistenceException e) {
+			throw e;
 		}
 		catch (Exception e) {
 			throw new PersistenceException(e);
