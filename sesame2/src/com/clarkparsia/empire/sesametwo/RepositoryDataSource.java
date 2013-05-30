@@ -123,6 +123,7 @@ public class RepositoryDataSource extends AbstractDataSource implements MutableD
 		assertConnected();
 
 		try {
+			LOGGER.debug("Inserting triples: {}", theGraph);
 			mConnection.add(theGraph);
 		}
 		catch (RepositoryException e) {
@@ -203,6 +204,7 @@ public class RepositoryDataSource extends AbstractDataSource implements MutableD
 		assertConnected();
 
 		try {
+			LOGGER.debug(theQuery);
 			TupleQueryResult aResult = mConnection.prepareTupleQuery(mQueryLang, theQuery).evaluate();
 
 			return new TupleQueryResultSet(aResult);
@@ -218,12 +220,16 @@ public class RepositoryDataSource extends AbstractDataSource implements MutableD
 	public Graph graphQuery(final String theQuery) throws QueryException {
 		assertConnected();
 
-		GraphBuildingRDFHandler aHandler = new GraphBuildingRDFHandler();
-
 		try {
+			GraphBuildingRDFHandler aHandler = new GraphBuildingRDFHandler();
+
 			GraphQuery aQuery = mConnection.prepareGraphQuery(mQueryLang, theQuery);
 			aQuery.evaluate(aHandler);			
-			return aHandler.getGraph();		
+			Graph aGraph = aHandler.getGraph();
+			if (LOGGER.isDebugEnabled()) {
+				LOGGER.debug("{} -> {} triples", theQuery, Integer.valueOf(aGraph.size()));
+			}
+			return aGraph;
 		}
 		catch (Exception e) {
 			throw new QueryException(e);
@@ -234,8 +240,14 @@ public class RepositoryDataSource extends AbstractDataSource implements MutableD
 	 * @inheritDoc
 	 */
 	public boolean ask(final String theQuery) throws QueryException {
+		assertConnected();
+
 		try {
-			return mConnection.prepareBooleanQuery(mQueryLang, theQuery).evaluate();
+			boolean aResult = mConnection.prepareBooleanQuery(mQueryLang, theQuery).evaluate();
+			if (LOGGER.isDebugEnabled()) {
+				LOGGER.debug("{} -> {}", theQuery, Boolean.valueOf(aResult));
+			}
+			return aResult;
 		}
 		catch (Exception e) {
 			throw new QueryException(e);
