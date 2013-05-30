@@ -18,7 +18,6 @@ package com.clarkparsia.empire.impl;
 import com.clarkparsia.empire.ds.DataSourceException;
 import com.clarkparsia.empire.ds.MutableDataSource;
 import com.clarkparsia.empire.ds.SupportsNamedGraphs;
-import com.clarkparsia.empire.SupportsRdfId;
 import com.clarkparsia.empire.ds.SupportsTransactions;
 import com.clarkparsia.empire.ds.DataSourceUtil;
 import com.clarkparsia.empire.ds.QueryException;
@@ -26,11 +25,9 @@ import com.clarkparsia.empire.ds.impl.TransactionalDataSource;
 import com.clarkparsia.empire.Empire;
 import com.clarkparsia.empire.EmpireException;
 import com.clarkparsia.empire.EmpireGenerated;
-import com.clarkparsia.empire.EmpireOptions;
 
 import com.clarkparsia.empire.annotation.InvalidRdfException;
 import com.clarkparsia.empire.annotation.RdfGenerator;
-import com.clarkparsia.empire.annotation.RdfsClass;
 import com.clarkparsia.empire.annotation.AnnotationChecker;
 
 import com.clarkparsia.openrdf.Graphs;
@@ -49,7 +46,6 @@ import javax.persistence.LockModeType;
 import javax.persistence.PersistenceException;
 import javax.persistence.Query;
 
-import javax.persistence.Entity;
 import javax.persistence.PrePersist;
 import javax.persistence.EntityListeners;
 import javax.persistence.PostPersist;
@@ -79,7 +75,6 @@ import static com.clarkparsia.empire.util.BeanReflectUtil.getAnnotatedGetters;
 import static com.clarkparsia.empire.util.BeanReflectUtil.asSetter;
 import static com.clarkparsia.empire.util.BeanReflectUtil.safeGet;
 import static com.clarkparsia.empire.util.BeanReflectUtil.safeSet;
-import static com.clarkparsia.empire.util.BeanReflectUtil.hasAnnotation;
 import static com.clarkparsia.empire.util.BeanReflectUtil.getAnnotatedMethods;
 
 import com.clarkparsia.empire.util.EmpireUtil;
@@ -344,13 +339,19 @@ public final class EntityManagerImpl implements EntityManager {
 	 * @inheritDoc
 	 */
 	public void persist(final Object theObj) {
+		this.persist(theObj, true);
+	}
+
+	private void persist(final Object theObj, boolean checkExists) {
 		assertStateOk(theObj);
 
-		try {
-			assertNotContains(theObj);
-		}
-		catch (Throwable e) {
-			throw new EntityExistsException(e);
+		if (checkExists) {
+			try {
+				assertNotContains(theObj);
+			}
+			catch (Throwable e) {
+				throw new EntityExistsException(e);
+			}
 		}
 
 		try {
@@ -532,7 +533,7 @@ public final class EntityManagerImpl implements EntityManager {
 					merge(theValue);
 				}
 				else {
-					persist(theValue);
+					persist(theValue, false);
 				}
 			}
 		}
@@ -577,7 +578,9 @@ public final class EntityManagerImpl implements EntityManager {
 			// cascaded?  such as strings, or a non Entity instance?
 			if (Collection.class.isAssignableFrom(theObj.getClass())) {
 				for (Object aValue : (Collection) theObj) {
-					cascade(aValue);
+					if (aValue != null) {
+						cascade(aValue);
+					}
 				}
 			}
 			else {
@@ -755,10 +758,11 @@ public final class EntityManagerImpl implements EntityManager {
 	 */
 	private void assertSupported(final Object theObj) {
 		Preconditions.checkArgument(theObj != null, "null objects are not supported");
-		Preconditions.checkArgument(theObj instanceof SupportsRdfId, "Persistent RDF objects must implement the SupportsRdfId interface.");
 
-		assertEntity(theObj);
-		assertRdfClass(theObj);
+// Controls already performed by AnnotationChecker.assertValid().
+//		Preconditions.checkArgument(theObj instanceof SupportsRdfId, "Persistent RDF objects must implement the SupportsRdfId interface.");
+//		assertEntity(theObj);
+//		assertRdfClass(theObj);
 
 		try {
 			AnnotationChecker.assertValid(theObj.getClass());
@@ -774,34 +778,37 @@ public final class EntityManagerImpl implements EntityManager {
 	 * @throws IllegalArgumentException if the instances does not have the Entity Annotation
 	 * @see Entity
 	 */
+/*
 	private void assertEntity(final Object theObj) {
 		if (EmpireOptions.ENFORCE_ENTITY_ANNOTATION) {
 			assertHasAnnotation(theObj, Entity.class);
 		}
 	}
-
+*/
 	/**
 	 * Enforce that the object has the {@link com.clarkparsia.empire.annotation.RdfsClass} annotation
 	 * @param theObj the instance
 	 * @throws IllegalArgumentException if the instances does not have the RdfClass annotation
 	 * @see com.clarkparsia.empire.annotation.RdfsClass
 	 */
+/*
 	private void assertRdfClass(final Object theObj) {
 		assertHasAnnotation(theObj, RdfsClass.class);
 	}
-
+*/
 	/**
 	 * Verify that the instance has the specified annotation
 	 * @param theObj the instance
 	 * @param theAnnotation the annotation the instance is required to have
 	 * @throws IllegalArgumentException thrown if the instance does not have the required annotation
 	 */
+/*
 	private void assertHasAnnotation(final Object theObj, final Class<? extends Annotation> theAnnotation) {
 		if (!hasAnnotation(theObj.getClass(), theAnnotation)) {
 			throw new IllegalArgumentException("Object (" + theObj.getClass() + ") is not an " + theAnnotation.getSimpleName());
 		}
 	}
-
+*/
 	/**
 	 * Returns whether or not the data source supports operations on named sub-graphs
 	 * @return true if it does, false otherwise.  Returning true indicates calls to {@link #asSupportsNamedGraphs()}
