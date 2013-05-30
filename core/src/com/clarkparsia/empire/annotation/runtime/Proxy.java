@@ -87,4 +87,8 @@ public class Proxy<T> {
 	public Class<T> getProxyClass() {
 		return mClass;
 	}
+
+	public SupportsRdfId.RdfKey getUri() {
+	    return mURI;
+	}
 }

@@ -67,7 +67,6 @@ import com.clarkparsia.empire.EmpireException;
 import com.clarkparsia.empire.EmpireOptions;
 import com.clarkparsia.empire.EmpireGenerated;
 import com.clarkparsia.empire.SupportsRdfId;
-import com.clarkparsia.empire.Empire;
 import com.clarkparsia.empire.Dialect;
 import com.clarkparsia.empire.annotation.runtime.Proxy;
 
@@ -85,7 +84,6 @@ import com.clarkparsia.empire.util.EmpireUtil;
 import static com.clarkparsia.empire.util.EmpireUtil.asPrimaryKey;
 import com.clarkparsia.openrdf.util.ResourceBuilder;
 import com.clarkparsia.openrdf.util.GraphBuilder;
-import com.clarkparsia.openrdf.ExtGraph;
 import com.clarkparsia.common.util.PrefixMapping;
 import com.clarkparsia.common.base.Strings2;
 import com.clarkparsia.common.base.Dates;
@@ -98,8 +96,6 @@ import com.google.common.collect.Collections2;
 import com.google.common.collect.Lists;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
-import com.google.inject.ProvisionException;
-import com.google.inject.ConfigurationException;
 
 import javax.persistence.Entity;
 import javax.persistence.Transient;
@@ -227,7 +223,7 @@ public final class RdfGenerator {
 	 */
 	public static <T> T fromRdf(Class<T> theClass, SupportsRdfId.RdfKey theId, DataSource theSource) throws InvalidRdfException, DataSourceException {
 		T aObj;
-
+/*
 		long start = System.currentTimeMillis();
 		try {
 			aObj = Empire.get().instance(theClass);
@@ -242,7 +238,7 @@ public final class RdfGenerator {
 		if (LOGGER.isDebugEnabled()) {
 			LOGGER.debug("Tried to get instance of class in {} ms ", (System.currentTimeMillis()-start ));
 		}
-/*
+
 		start = System.currentTimeMillis();
 
 		if (aObj == null) {
@@ -288,33 +284,31 @@ public final class RdfGenerator {
 		if (LOGGER.isDebugEnabled()) {
 			LOGGER.debug("Has rdfId {} ms", (System.currentTimeMillis()-start ));
 		}
-*/
 		start = System.currentTimeMillis();
+*/
 		
 		Class<T> aNewClass = determineClass(theClass, theId, theSource);
 		try {
-                        AnnotationChecker.assertValid((aNewClass != null)? aNewClass: theClass);
+                        AnnotationChecker.assertValid(aNewClass);
 		}
                 catch (EmpireException e) {
                         throw new IllegalArgumentException(e);
                 }
 //		if (!aNewClass.equals(aObj.getClass())) {
 			try {
-	            aObj = aNewClass.newInstance();
-            }
-            catch (InstantiationException e) {
-            	throw new InvalidRdfException("Cannot create instance of bean, should have a default constructor.", e);
-            }
-            catch (IllegalAccessException e) {
-            	throw new InvalidRdfException("Could not access default constructor for class: " + theClass, e);
-            }
+				aObj = aNewClass.newInstance();
+			}
+			catch (InstantiationException e) {
+				throw new InvalidRdfException("Cannot create instance of bean, should have a default constructor.", e);
+			}
+			catch (IllegalAccessException e) {
+				throw new InvalidRdfException("Could not access default constructor for class: " + theClass, e);
+			}
 			catch (Exception e) {
 				throw new InvalidRdfException("Cannot create an instance of bean", e);
 			}
-
 			asSupportsRdfId(aObj).setRdfId(theId);
 //		}
-
 		return fromRdf(aObj, theSource);
 	}
 	
@@ -324,7 +318,7 @@ public final class RdfGenerator {
 //		final SupportsRdfId aTmpSupportsRdfId = asSupportsRdfId(theObj);
 	 
 //		ExtGraph aGraph = new ExtGraph(DataSourceUtil.describe(theSource, theObj));
-		final Collection<Value> aTypes = DataSourceUtil.getValues(theSource, EmpireUtil.asResource(EmpireUtil.asSupportsRdfId(theObj)), RDF.TYPE);
+		final Collection<Resource> aTypes = DataSourceUtil.getTypes(theSource, EmpireUtil.asResource(EmpireUtil.asSupportsRdfId(theObj)));
 		
 		// right now, our best match is the original class (we will refine later)
 		
@@ -365,9 +359,8 @@ public final class RdfGenerator {
 			}
 		}
 		catch (Exception e) {
-            throw new InvalidRdfException("Cannot generate a class for a bean", e);
+			throw new InvalidRdfException("Cannot generate a class for a bean", e);
 		}
-		
 		return aResult;
 	}
 	
@@ -1152,16 +1145,14 @@ public final class RdfGenerator {
 			Collection<Resource> aTypes = DataSourceUtil.getTypes(theSource, theId);
 
 			// k, so now we know the type, if we can match the type to a class then we're in business
-			if (aTypes != null) {
-				for (Resource aType : aTypes) {
-					if (aType instanceof URI) {
-						for (Class aTypeClass : TYPE_TO_CLASS.get( (URI) aType)) {
-							if ((BeanReflectUtil.hasAnnotation(aTypeClass, RdfsClass.class)) &&
-							    (aClass.isAssignableFrom(aTypeClass))) {
-								// lets try this one
-								aClass = aTypeClass;
-								break;
-							}
+			for (Resource aType : aTypes) {
+				if (aType instanceof URI) {
+					for (Class aTypeClass : TYPE_TO_CLASS.get( (URI) aType)) {
+						if ((BeanReflectUtil.hasAnnotation(aTypeClass, RdfsClass.class)) &&
+						    (aClass.isAssignableFrom(aTypeClass))) {
+							// lets try this one
+							aClass = aTypeClass;
+							break;
 						}
 					}
 				}
@@ -1461,7 +1452,16 @@ public final class RdfGenerator {
 		 */
 		public Object invoke(final Object theThis, final Method theMethod, final Method theProxyMethod, final Object[] theArgs) throws Throwable {
 
-			return theMethod.invoke(mProxy.value(), theArgs);
+			if ("hashCode".equals(theMethod.getName()) && (theMethod.getParameterTypes().length == 0)) {
+			    return Integer.valueOf(mProxy.getUri().hashCode());
+			}
+			else if ("equals".equals(theMethod.getName()) && (theMethod.getParameterTypes().length == 1)) {
+			    return (theArgs[0] instanceof Proxy<?>)?
+			                    Boolean.valueOf(mProxy.getUri().equals(((Proxy<?>)theArgs[0]).getUri())): Boolean.FALSE;
+			}
+			else {
+			    return theMethod.invoke(mProxy.value(), theArgs);
+			}
 		}
 	}
 	
