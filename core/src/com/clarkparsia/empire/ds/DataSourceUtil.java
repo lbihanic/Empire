@@ -17,7 +17,7 @@ package com.clarkparsia.empire.ds;
 
 import com.clarkparsia.empire.ds.impl.TripleSourceAdapter;
 import com.clarkparsia.empire.Dialect;
-import com.clarkparsia.empire.Empire;
+import com.clarkparsia.empire.SupportsRdfId;
 import com.clarkparsia.empire.util.EmpireUtil;
 import com.clarkparsia.empire.impl.serql.SerqlDialect;
 import com.clarkparsia.empire.impl.sparql.ARQSPARQLDialect;
@@ -29,8 +29,10 @@ import com.google.common.base.Function;
 
 import org.openrdf.model.Resource;
 import org.openrdf.model.Graph;
+import org.openrdf.model.URI;
 import org.openrdf.model.Value;
 import org.openrdf.model.BNode;
+import org.openrdf.model.impl.URIImpl;
 import org.openrdf.model.vocabulary.RDF;
 
 import org.openrdf.query.BindingSet;
@@ -56,7 +58,7 @@ public final class DataSourceUtil {
 	/**
 	 * The logger
 	 */
-	private static final Logger LOGGER = LoggerFactory.getLogger(Empire.class.getName());
+	private static final Logger LOGGER = LoggerFactory.getLogger(DataSourceUtil.class);
 
 	/**
 	 * No instances
@@ -94,18 +96,14 @@ public final class DataSourceUtil {
 	 * @throws QueryException if there is an error while querying for the graph
 	 */
 	public static Graph describe(DataSource theSource, Object theObj) throws QueryException {
-		String aNG = null;
+		java.net.URI aNG = null;
 
 		if (EmpireUtil.asSupportsRdfId(theObj).getRdfId() == null) {
 			return Graphs.newGraph();
 		}
 
 		if (theSource instanceof SupportsNamedGraphs && EmpireUtil.hasNamedGraphSpecified(theObj)) {
-			java.net.URI aURI = EmpireUtil.getNamedGraph(theObj);
-
-			if (aURI != null) {
-				aNG = aURI.toString();
-			}
+			aNG = EmpireUtil.getNamedGraph(theObj);
 		}
 
 		Dialect aDialect = theSource.getQueryFactory().getDialect();
@@ -118,27 +116,36 @@ public final class DataSourceUtil {
 			return Graphs.newGraph();
 		}
 
-		// TODO: if source supports describe queries, use that.
-
-		String aSPARQL = "construct {?s ?p ?o}\n" +
-						 (aNG == null ? "" : "from <" + aNG + ">\n") +
-						 "where {?s ?p ?o. filter(?s = " + aDialect.asQueryString(aResource) + ") }";
-
-
-		String aSeRQL = "construct {s} p {o}\n" +
-						 (aNG == null ? "from\n" : "from context <" + aNG + ">\n") +
-						 "{s} p {o} where s = " + aDialect.asQueryString(aResource) + "";
-
 		Graph aGraph;
-
-		if (theSource.getQueryFactory().getDialect() instanceof SerqlDialect) {
-			aGraph = theSource.graphQuery(aSeRQL);
+		// if source supports describe queries, use that.
+		if (theSource instanceof TripleSource) {
+			try {
+				URI aNgUri = (aNG != null)? new URIImpl(aNG.toString()): null;
+				aGraph = Graphs.newGraph(((TripleSource)theSource).getStatements(aResource, null, null, aNgUri));
+			}
+			catch (Exception e) {
+				throw new QueryException(e);
+			}
 		}
 		else {
-			// fall back on sparql
-			aGraph = theSource.graphQuery(aSPARQL);
+			final String aUri = aDialect.asQueryString(aResource);
+			String aQuery;
+			if (aDialect instanceof SerqlDialect) {
+				aQuery = "construct {s} p {o}\n" +
+					 (aNG == null ? "from\n" : "from context <" + aNG + ">\n") +
+					 "{s} p {o} where s = " + aUri + "";
+			}
+			else {
+				// fall back on sparql
+				aQuery = "construct {" + aUri + " ?p ?o}\n" +
+					 (aNG == null ? "" : "from <" + aNG + ">\n") +
+					 "where {" + aUri + " ?p ?o. }";
+			}
+			aGraph = theSource.graphQuery(aQuery);
 		}
-
+		if (LOGGER.isDebugEnabled()) {
+			LOGGER.debug("Describe {}: {} triples", aResource, Integer.valueOf(aGraph.size()));
+		}
 		return aGraph;
 	}
 
@@ -151,46 +158,44 @@ public final class DataSourceUtil {
 	 * @throws QueryException if there is an error while querying for the graph
 	 */
 	public static boolean exists(DataSource theSource, Object theObj) throws QueryException {
-		String aNG = null;
-
-		if (EmpireUtil.asSupportsRdfId(theObj).getRdfId() == null) {
+		SupportsRdfId aKey = EmpireUtil.asSupportsRdfId(theObj);
+		if (aKey.getRdfId() == null) {
 			return false;
 		}
 
+		String aNG = null;
 		if (theSource instanceof SupportsNamedGraphs && EmpireUtil.hasNamedGraphSpecified(theObj)) {
 			java.net.URI aURI = EmpireUtil.getNamedGraph(theObj);
-
 			if (aURI != null) {
 				aNG = aURI.toString();
 			}
 		}
-
+		boolean aExists = false;
 		Dialect aDialect = theSource.getQueryFactory().getDialect();
-
-		String aSPARQL = "select distinct ?s\n" +
-						 (aNG == null ? "" : "from <" + aNG + ">\n") +
-						 "where {?s ?p ?o. filter(?s = " + aDialect.asQueryString(EmpireUtil.asResource(EmpireUtil.asSupportsRdfId(theObj))) + ") } limit 1";
-
-		String aSeRQL = "select distinct s\n" +
-						 (aNG == null ? "from\n" : "from context <" + aNG + ">\n") +
-						 "{s} p {o} where s = " + aDialect.asQueryString(EmpireUtil.asResource(EmpireUtil.asSupportsRdfId(theObj))) + " limit 1";
-
-		ResultSet aResults;
-
-		if (theSource.getQueryFactory().getDialect() instanceof SerqlDialect) {
-			aResults = theSource.selectQuery(aSeRQL);
+		final String aUri = aDialect.asQueryString(EmpireUtil.asResource(aKey));
+		if (aDialect instanceof SerqlDialect) {
+			final String aSeRQL = "select distinct s\n" +
+						(aNG == null ? "from\n" : "from context <" + aNG + ">\n") +
+						"{s} p {o} where s = " + aUri + " limit 1";
+			ResultSet aResults = theSource.selectQuery(aSeRQL);
+			try {
+				aExists = aResults.hasNext();
+			}
+			finally {
+				aResults.close();
+			}
 		}
 		else {
 			// fall back on sparql
-			aResults = theSource.selectQuery(aSPARQL);
+			final String aSPARQL = "ask " +
+					 (aNG == null ? "" : "from <" + aNG + "> ") +
+					 "{ " + aUri + " ?p ?o. }";
+			aExists = theSource.ask(aSPARQL);
 		}
-
-		try {
-			return aResults.hasNext();
+		if (LOGGER.isDebugEnabled()) {
+			LOGGER.debug("{} exists? {}", aUri, Boolean.valueOf(aExists));
 		}
-		finally {
-			aResults.close();
-		}
+		return aExists;
 	}
 
 	/**
@@ -200,29 +205,24 @@ public final class DataSourceUtil {
 	 * @return the rdf:type values for the concept, or null if there is an error or one cannot be found.
 	 */
 	public static Collection<Resource> getTypes(DataSource theSource, Resource theConcept) {
+		Collection<Resource> aTypes = new LinkedList<Resource>();
+/*
 		if (theSource == null) {
 			return null;
 		}
-
+*/
 		try {
-			final Collection<Value> aTypes = getValues(theSource, theConcept, RDF.TYPE);
-			if (aTypes.isEmpty()) {
-				return null;
+			final Collection<Value> aVals = getValues(theSource, theConcept, RDF.TYPE);
+			for (Value v : aVals) {
+				aTypes.add((Resource)v);
 			}
-			else {
-				Collection<Resource> types = new LinkedList<Resource>();
-				for (Value v : aTypes) {
-				    types.add((Resource)v);
-				}
-				// return (Resource) aTypes.iterator().next();
-				return types;
-			}
+			// return (Resource) aTypes.iterator().next();
 		}
 		catch (DataSourceException e) {
 			LOGGER.error("There was an error while getting the type of a resource", e);
-
-			return null;
 		}
+		LOGGER.debug("Types for <{}>: {}", theConcept, aTypes);
+		return aTypes;
 	}
 
 	/**
@@ -234,38 +234,33 @@ public final class DataSourceUtil {
 	 * @throws com.clarkparsia.empire.ds.DataSourceException if there is an error while querying the data source.
 	 */
 	public static Collection<Value> getValues(final DataSource theSource, final Resource theSubject, final org.openrdf.model.URI thePredicate) throws DataSourceException {
-		final String aSPARQLQuery = "select ?obj\n" +
-									"where {\n" +
-									theSource.getQueryFactory().getDialect().asQueryString(theSubject) + " <" + thePredicate.stringValue() + "> ?obj.  }";
-
-		final String aSERQLQuery = "select obj\n" +
-								   "from\n" +
-								   "{"+theSource.getQueryFactory().getDialect().asQueryString(theSubject) + "} <" + thePredicate.stringValue() + "> {obj}  ";
-
 		ResultSet aResults = null;
-
 		try {
-			if (theSource.getQueryFactory().getDialect().equals(SerqlDialect.instance())) {
-				aResults = theSource.selectQuery(aSERQLQuery);
+			Dialect aDialect = theSource.getQueryFactory().getDialect();
+			String aQuery;
+			if (aDialect instanceof SerqlDialect) {
+				aQuery = "select obj from {" +
+						aDialect.asQueryString(theSubject) + "} <" + thePredicate.stringValue() + "> {obj}";
 			}
 			else {
-				aResults = theSource.selectQuery(aSPARQLQuery);
+				aQuery = "select ?obj where { " +
+						aDialect.asQueryString(theSubject) + " <" + thePredicate.stringValue() + "> ?obj. }";
 			}
-
+			aResults = theSource.selectQuery(aQuery);
 			return Collections2.transform(Sets.newHashSet(aResults), new Function<BindingSet, Value>() {
 					public Value apply(final BindingSet theIn) {
 						return theIn.getValue("obj");
 					}
-			});
+				});
 		}
 		catch (Exception e) {
 			throw new DataSourceException(e);
 		}
-        finally {
-            if (aResults != null) {
-                aResults.close();
-            }
-        }
+		finally {
+			if (aResults != null) {
+				aResults.close();
+			}
+		}
 	}
 
 	/**
