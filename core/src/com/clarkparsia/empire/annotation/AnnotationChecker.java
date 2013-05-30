@@ -31,6 +31,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * <p>Utility class for checking that a class has the required annotations on it and that it's annotations are used
@@ -43,6 +45,9 @@ import java.util.HashSet;
  * @version 0.7
  */
 public final class AnnotationChecker {
+
+	private final static ConcurrentMap<Class<?>,Boolean> validClasses =
+	                            new ConcurrentHashMap<Class<?>,Boolean>();
 
 	/**
 	 * No instances
@@ -57,6 +62,9 @@ public final class AnnotationChecker {
 	 * @throws com.clarkparsia.empire.EmpireException if
 	 */
 	public static void assertValid(final Class theClass) throws EmpireException {
+		if (validClasses.containsKey(theClass)) {
+			return;
+		}
 		if (!isEmpireCompatible(theClass)) {
 			throw new EmpireException("Missing a required annotation (Entity & RdfsClass) or does not implement SupportsRdfId");
 		}
@@ -77,6 +85,7 @@ public final class AnnotationChecker {
 				}
 			}
 		}
+		validClasses.put(theClass, Boolean.TRUE);
 	}
 
 	/**
